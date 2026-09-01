@@ -36,10 +36,15 @@ export const CONFIG = {
   shakeOnHit: 6,         // 碰撞屏震强度
 
   // ===== 魔女试炼 / 肉鸽成长 =====
-  trialPerLevel: 2500,   // 每累积多少试炼值触发一次三选一 Buff
+  trialPerLevel: 2500,   // 每累积多少试炼值触发一次缓冲休息区
   starValue: 50,         // 魔法星星的试炼值
   potionValue: 100,   // 魔法药水的试炼值
   potionChance: 0.32,    // 收集物中药水的占比（其余为星星）
+
+  // ===== 缓冲休息区 · 迷你游戏赌场 + 道途商城 =====
+  coinPerStar: 1,          // 魔法星星 兑换收集币比例
+  coinPerPotion: 2,        // 魔法药水 兑换收集币比例（更稀有，价值更高）
+  bufferPlaysPerGame: 3,   // 每次进入缓冲区，每款小游戏可游玩的次数
 
   // 伤害机制（不再秒死）
   hitPenalty: 20,        // 撞障碍扣除的试炼值

@@ -16,6 +16,8 @@ import { Difficulty } from "../data/difficulty.js";
 import { ACHIEVEMENTS } from "../data/achievements.js";
 import { MenuScene } from "./MenuScene.js";
 import { audio } from "../engine/Audio.js";
+import { TowerRun } from "../systems/TowerRun.js";
+import { REMAINS } from "../data/curses.js";
 
 // 全局难度系数（肉鸽爽游：玩家肉、能连续输出，Boss 耐打能撑30秒+、弹幕稀疏好躲）
 const PLAYER_MAX_HP = 40;         // 玩家基础血量（长血条，很肉）
@@ -32,6 +34,7 @@ export class BossScene extends Scene {
     this.level = level;
     this.weapon = weapon;
     this.carry = carry;
+    this.towerNode = (carry && carry.towerNode) || null;
     this.endless = !!(level && level.endless);
     this.round = (carry && carry.round) || level.round || 1;
     this.save = Save.load();
@@ -57,6 +60,9 @@ export class BossScene extends Scene {
   // 护盾结界：受伤减半 → 换算成更多血量（地狱 3 血制下不加血，保持生死张力）
     const guard = B.guard || 0;
     if (guard > 0 && !this.diff.bossLifeMode) { this.player.maxHp += guard * 4; this.player.hp += guard * 4; }
+    // 缓冲休息区道具「Boss战·开局无敌」：每层 +3 秒开局无敌
+    const bossInvulnStacks = B.bossInvuln || 0;
+    if (bossInvulnStacks > 0) this.player.invuln = bossInvulnStacks * 3;
     // 迅捷：射速加成（每层 +8%，boss 战体现为冷却缩短）
     this.hasteMul = 1 + (B.haste || 0) * 0.08;
     // 双倍/破障：转化为额外伤害倍率（每层 +12%）
@@ -91,6 +97,19 @@ export class BossScene extends Scene {
         fireCd: 0.4,
         spin: 0,
       });
+    }
+
+    // ===== 魔女回廊 · "沉眠之眼"圣骸：召出协同攻击的幻影，但自身输出略微削弱 =====
+    if (this.towerNode && TowerRun.hasCompanionRemain()) {
+      this.companions.push({
+        color: "#5cc8ff",
+        ang: Math.PI * 0.5,
+        orbitR: 34,
+        x: this.player.x, y: this.player.y,
+        fireCd: 0.5,
+        spin: 0,
+      });
+      this.dmgBuffMul *= 0.85;
     }
 
     // Boss 状态（右侧）  地狱难度：血量 ×3
@@ -171,7 +190,11 @@ export class BossScene extends Scene {
           if (input.justPressed("enter", " ") || input.tapIn(b.next)) { this._navigating = true; audio.play("click"); this._goNext(); }
           else if (input.justPressed("escape") || input.tapIn(b.menu)) { this._navigating = true; audio.play("click"); this._goSelect(); }
         } else {
-          if (input.justPressed("enter", " ") || input.tapIn(b.next)) { this._navigating = true; audio.play("click"); this._retry(); }
+          if (input.justPressed("enter", " ") || input.tapIn(b.next)) {
+            this._navigating = true; audio.play("click");
+            if (this.towerNode) this.game.changeScene(new MenuScene(this.game));
+            else this._retry();
+          }
           else if (input.justPressed("escape") || input.tapIn(b.menu)) { this._navigating = true; audio.play("click"); this.game.changeScene(new MenuScene(this.game)); }
         }
       }
@@ -569,6 +592,24 @@ export class BossScene extends Scene {
     this.endT = 0;
     this.stars = [];
     this.particles.burst(this.bx, this.by, PALETTE.gold, 40, { speed: 180, life: 1.0, size: 3 });
+
+    // ===== 魔女回廊 · 回廊主宰战胜利：独立经济结算，不写入主线存档进度 =====
+    if (this.towerNode) {
+      const baseGain = Math.round(this.reward * 1.4 * TowerRun.rewardMul());
+      const before = TowerRun.state.crystals;
+      TowerRun.addCrystals(baseGain);
+      this._towerCrystalGain = TowerRun.state.crystals - before;
+      this._towerDrop = Math.random() < 0.7 ? TowerRun.grantRandomItem("rare") : null;
+      TowerRun.markNodeDone(this.towerNode.id);
+      TowerRun.moveTo(this.towerNode.id);
+      this._towerIsLastFloor = TowerRun.state.floor >= TowerRun.state.totalFloors;
+      this._nextPromise = import("./TowerScene.js").catch((e) => {
+        console.warn("[BossScene] 预加载 TowerScene 失败，将在切换时重试", e);
+        return null;
+      });
+      return;
+    }
+
     if (this.endless) {
       // 无限模式：不解锁关卡，仅累加金币奖励并存档
       this.save.coins += this.reward;
@@ -657,6 +698,21 @@ export class BossScene extends Scene {
     this.stars = [];
     audio.play("death");
     this.particles.burst(this.player.x, this.player.y, PALETTE.danger, 30, { speed: 160, life: 0.9, size: 3 });
+
+    // ===== 魔女回廊 · Boss战失败：石化之心可免死一次，否则本次爬塔彻底终结 =====
+    if (this.towerNode) {
+      if (TowerRun.tryConsumeRevive()) {
+        this.state = "fight";
+        this.player.hp = this.player.maxHp;
+        this.player.invuln = 1.2;
+        this.particles.burst(this.player.x, this.player.y, PALETTE.gold, 30, { speed: 170, life: 0.9, size: 3 });
+        audio.play("rareStar");
+        return;
+      }
+      TowerRun.reset();
+      return;
+    }
+
     // 失败结算展示期间预取重试所需的武器选择场景。
     this._retryPromise = import("./WeaponSelectScene.js").catch((e) => {
       console.warn("[BossScene] 预加载重试场景失败，将在切换时重试", e);
@@ -665,7 +721,27 @@ export class BossScene extends Scene {
   }
 
   _goNext() {
-if (this.endless) {
+if (this.towerNode) {
+      // 魔女回廊：推进楼层（或全通关结算），回到回廊地图
+      if (this._towerIsLastFloor) {
+        TowerRun.completeTower();
+      } else {
+        TowerRun.advanceFloor();
+      }
+      const loader = this._nextPromise || import("./TowerScene.js");
+      loader
+        .then((m) => {
+          if (!m) throw new Error("TowerScene module not loaded");
+          this.game.changeScene(new m.TowerScene(this.game));
+        })
+        .catch((e) => {
+          console.warn("[BossScene] 返回回廊地图失败，可再次点击重试", e);
+          this._navigating = false;
+          this._nextPromise = null;
+        });
+      return;
+    }
+    if (this.endless) {
       // 无限模式：进入下一轮（round+1），累加 buffs / totalTrial 到下一轮 RunScene
    const carry = {
    buffs: { ...(this.carry.buffs || {}) },
@@ -712,6 +788,11 @@ if (this.endless) {
   }
 
   _goSelect() {
+    // 魔女回廊：胜利画面的"选关/主菜单"按钮直接返回主菜单（继续爬塔用另一个按钮）
+    if (this.towerNode) {
+      this.game.changeScene(new MenuScene(this.game));
+      return;
+    }
     const loader = this._nextPromise || import("./LevelSelectScene.js");
     loader
       .then((m) => {
@@ -1049,26 +1130,39 @@ if (this.endless) {
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillStyle = PALETTE.gold; ctx.font = "bold 24px 'Microsoft YaHei', 'PingFang SC', sans-serif";
     ctx.shadowColor = PALETTE.gold; ctx.shadowBlur = 10;
-    const allClear = !this.endless && this.level.index >= TOTAL_LEVELS;
-    if (this.endless) {
+    const allClear = !this.endless && !this.towerNode && this.level.index >= TOTAL_LEVELS;
+    if (this.towerNode) {
+      ctx.fillText(this._towerIsLastFloor ? "回廊主宰镇压！魔女回廊通关！" : `第 ${TowerRun.state.floor} 层回廊主宰已镇压！`, W / 2, H * 0.3);
+    } else if (this.endless) {
       ctx.fillText(`第${this.round}轮达成！击败 ${this.boss.name}`, W / 2, H * 0.3);
     } else {
  ctx.fillText(allClear ? "全部试炼达成！" : "击败 " + this.boss.name, W / 2, H * 0.3);
     }
     ctx.shadowBlur = 0;
     ctx.fillStyle = PALETTE.text; ctx.font = "12px 'Microsoft YaHei', 'PingFang SC', sans-serif";
-    const rewardSuffix = this.coinMultiplier > 1 ? `（点石成金 ×${this.coinMultiplier}）` : "";
-    ctx.fillText(`金币 +${this.reward}${rewardSuffix}   （共 ${this.save.coins}）`, W / 2, H * 0.44);
-    ctx.fillStyle = "#ffd94a";
-    ctx.fillText(`✶ 六芒星收集 x${this.starCollected}`, W / 2, H * 0.5);
-    if (this.endless) ctx.fillText(`继续挑战 第${this.round + 1}轮（Boss 随机·属性继续叠加）`, W / 2, H * 0.58);
+    if (this.towerNode) {
+      ctx.fillStyle = PALETTE.cyan;
+      ctx.fillText(`☾ 月光结晶 +${this._towerCrystalGain || 0}（结余 ${TowerRun.state.crystals}）`, W / 2, H * 0.44);
+      if (this._towerDrop) {
+        ctx.fillStyle = this._towerDrop.color || PALETTE.text;
+        const kind = REMAINS.some((r) => r.id === this._towerDrop.id) ? "圣骸" : "咒物";
+        ctx.fillText(`获得${kind}「${this._towerDrop.icon || ""} ${this._towerDrop.name}」`, W / 2, H * 0.5);
+      }
+    } else {
+      const rewardSuffix = this.coinMultiplier > 1 ? `（点石成金 ×${this.coinMultiplier}）` : "";
+      ctx.fillText(`金币 +${this.reward}${rewardSuffix}   （共 ${this.save.coins}）`, W / 2, H * 0.44);
+      ctx.fillStyle = "#ffd94a";
+      ctx.fillText(`✶ 六芒星收集 x${this.starCollected}`, W / 2, H * 0.5);
+    }
+    if (this.towerNode) ctx.fillText(this._towerIsLastFloor ? "你镇压了所有回廊主宰！" : "点击继续爬塔，前往下一层", W / 2, H * 0.58);
+    else if (this.endless) ctx.fillText(`继续挑战 第${this.round + 1}轮（Boss 随机·属性继续叠加）`, W / 2, H * 0.58);
     else if (!allClear) ctx.fillText(`已解锁 第${this.level.index + 1}关`, W / 2, H * 0.58);
     else ctx.fillText("你已成为真正的魔女！", W / 2, H * 0.58);
 
     if (this.endT > 0.5) {
       const b = this._endButtons();
-    this._btn(ctx, b.next, this.endless ? "下一轮" : (allClear ? "选关" : "下一关"), PALETTE.cyan);
-      this._btn(ctx, b.menu, "选关界面", PALETTE.neon);
+    this._btn(ctx, b.next, this.towerNode ? (this._towerIsLastFloor ? "完成回廊" : "继续爬塔") : (this.endless ? "下一轮" : (allClear ? "选关" : "下一关")), PALETTE.cyan);
+      this._btn(ctx, b.menu, this.towerNode ? "返回主菜单" : "选关界面", PALETTE.neon);
     }
     ctx.textAlign = "left";
   }
@@ -1080,9 +1174,13 @@ if (this.endless) {
     ctx.fillText("试炼失败", W / 2, H * 0.32);
     ctx.fillStyle = PALETTE.text; ctx.font = "12px 'Microsoft YaHei', 'PingFang SC', sans-serif";
     ctx.fillText(`${this.boss.name} 太强大了……`, W / 2, H * 0.46);
+    if (this.towerNode) {
+      ctx.fillStyle = PALETTE.danger; ctx.font = "10px 'Microsoft YaHei', 'PingFang SC', sans-serif";
+      ctx.fillText("魔女回廊的这次试炼就此终结……", W / 2, H * 0.56);
+    }
     if (this.endT > 0.5) {
       const b = this._endButtons();
-      this._btn(ctx, b.next, "再战", PALETTE.cyan);
+      this._btn(ctx, b.next, this.towerNode ? "返回主菜单" : "再战", PALETTE.cyan);
       this._btn(ctx, b.menu, "主菜单", PALETTE.neon);
     }
     ctx.textAlign = "left";

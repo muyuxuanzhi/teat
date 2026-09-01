@@ -7,11 +7,13 @@ import { Save } from "../systems/Save.js";
 import { getSkin } from "../data/skins.js";
 
 export class IntroScene extends Scene {
-  constructor(game, level) {
+  // towerNode: 若从"魔女回廊"地图进入，携带当前回廊节点信息，会一路透传给 RunScene
+  constructor(game, level, towerNode = null) {
     super(game);
     this.t = 0;
     this.save = Save.load();
     this.level = level || null;
+    this.towerNode = towerNode || null;
     this.bg = new Background(game.width, game.height, getSkin("background", this.save.equipped.background));
     // 说话人：跟随玩家当前装备的角色皮肤，而不是固定写死叶林；
     // 台词内容也按角色人设分开写（叶林认真型 / 金橙慵懒电波型 / 海於冷淡独处型），
@@ -149,7 +151,7 @@ export class IntroScene extends Scene {
     loader
       .then((m) => {
         if (!m) throw new Error("RunScene module not loaded");
-        this.game.changeScene(new m.RunScene(this.game, this.level));
+        this.game.changeScene(new m.RunScene(this.game, this.level, null, this.towerNode));
       })
       .catch((e) => {
         // 加载失败（弱网/超时等）：不能让玩家卡在这里点了完全没反应——

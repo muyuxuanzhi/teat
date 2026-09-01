@@ -20,6 +20,7 @@ export class Spawner {
     this.timer = 0;
     this.interval = CONFIG.spawnStart;
     this.orbBonus = 0; // 幸运星 buff 提升的收集物概率
+    this.disableSpawn = false; // 缓冲休息区进入/离开过渡段：暂停生成，让角色先经过一段空白安全路
   }
 
   reset() {
@@ -36,7 +37,7 @@ export class Spawner {
     );
 
     this.timer += dt;
-    if (this.timer >= this.interval) {
+    if (!this.disableSpawn && this.timer >= this.interval) {
       this.timer = 0;
       this._spawn();
     }

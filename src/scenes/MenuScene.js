@@ -9,6 +9,7 @@ import { ShopScene } from "./ShopScene.js";
 import { AchievementsScene } from "./AchievementsScene.js";
 import { Difficulty, DIFF_ORDER, getDifficulty } from "../data/difficulty.js";
 import { audio } from "../engine/Audio.js";
+import { TowerRun } from "../systems/TowerRun.js";
 
 export class MenuScene extends Scene {
   constructor(game) {
@@ -17,6 +18,7 @@ export class MenuScene extends Scene {
     this.save = Save.load();
     this.bg = new Background(game.width, game.height, getSkin("background", this.save.equipped.background));
     //菜单项：难度为可切换项（左右/点击循环）
+    // 魔女回廊暂时隐藏，入口保留在代码里（见下方注释掉的分支），不移除功能本身
     this.items = ["开始试炼", "图鉴", "商城", "成就", "难度"];
     this.sel = 0;
     this.diffId = Difficulty.load();
@@ -38,15 +40,17 @@ export class MenuScene extends Scene {
 
   _itemRects() {
     const W = this.game.width, H = this.game.height;
-    // 5 项时把间距从 28 收到 25 + 整体上移一点，避免 480x270 内挤到底边
-    const startY = H * 0.52 - 12;
-    const gap = 25;
-    return this.items.map((_, i) => ({ x: W / 2 - 90, y: startY + i * gap, w: 180, h: 22 }));
+    // 6 项时把间距收到 22 + 整体再上移一点，避免 480x270 内挤到底边
+    const startY = H * 0.49 - 14;
+    const gap = 22;
+    return this.items.map((_, i) => ({ x: W / 2 - 90, y: startY + i * gap, w: 180, h: 20 }));
   }
 
   _activate(i) {
     audio.play("click");
     if (i === 0) this.game.changeScene(new LevelSelectScene(this.game));
+    // 魔女回廊入口已隐藏（原 i===1 分支），保留下方代码供后续恢复：
+    // import("./TowerScene.js").then((m) => { if (!TowerRun.isActive()) TowerRun.start(); this.game.changeScene(new m.TowerScene(this.game)); });
     else if (i === 1) {
       import("./CodexScene.js")
         .then((m) => this.game.changeScene(new m.CodexScene(this.game)))
