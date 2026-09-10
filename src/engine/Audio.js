@@ -31,13 +31,20 @@ const SFX_FILES = {
 
 // 各音效相对增益微调：原始素材响度不完全一致（click 天生比较“冲耳”，
 // 其余几个偏弱），这里单独放大后几个，让它们在 BGM 播放时也能被听清。
+// hit（受击/碰撞音效）：略调低响度，配合下方低通滤波去掉刺耳高频，听感更柔和。
 const SFX_GAIN = {
   collectStar: 1.0,
   collectPotion: 1.0,
   rareStar: 1.2,
-  hit: 1.7,
+  hit: 1.15,
   death: 1.7,
   click: 1.0,
+};
+
+// 部分音效额外接一个 BiquadFilter，柔化音色（目前仅 hit：低通滤波器削掉
+// 尖锐高频，让"碰撞"声从"哔"的一声变得闷一些、更柔和，不那么刺耳）。
+const SFX_FILTER = {
+  hit: { type: "lowpass", frequency: 2200, q: 0.7 },
 };
 
 const BGM_FILES = {
@@ -195,10 +202,22 @@ class AudioManager {
             src.buffer = buf;
             const gain = ctx.createGain();
             gain.gain.value = SFX_GAIN[id] != null ? SFX_GAIN[id] : 1;
-            src.connect(gain);
+            // 可选柔化滤波：接在 src 与 gain 之间，只影响音色不影响响度
+            const filterCfg = SFX_FILTER[id];
+            let filterNode = null;
+            if (filterCfg) {
+              filterNode = ctx.createBiquadFilter();
+              filterNode.type = filterCfg.type;
+              filterNode.frequency.value = filterCfg.frequency;
+              if (filterCfg.q != null) filterNode.Q.value = filterCfg.q;
+              src.connect(filterNode);
+              filterNode.connect(gain);
+            } else {
+              src.connect(gain);
+            }
             gain.connect(this._sfxBus);
             src.onended = () => {
-              try { src.disconnect(); gain.disconnect(); } catch (e2) { /* 忽略 */ }
+              try { src.disconnect(); if (filterNode) filterNode.disconnect(); gain.disconnect(); } catch (e2) { /* 忽略 */ }
             };
             src.start(0);
           } catch (e2) { /* 忽略：单次播放失败不影响后续 */ }
