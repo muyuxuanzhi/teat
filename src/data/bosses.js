@@ -8,10 +8,14 @@
 //
 // 地狱难度额外机制：
 // - hellPattern：Boss 专属"符卡"式常驻弹幕（环形缺口/交织螺旋等，见 BossScene._emitPattern）
-// - ultimate：Boss 血量掉到约 50% 时触发一次的"大招"符卡（参考东方 Project 符卡系统），
+// - ultimate：Boss 血量掉到约 50%/15% 时各触发一次的"大招"符卡（参考东方 Project 符卡系统），
 //   触发期间会暂停常规弹幕，改为播放编排好的多段攻击循环（loop），并在屏幕上显示符卡名，
 //   持续 duration 秒后自动结束、恢复常规攻击。每段攻击仍然是有规律可读的图案组合，
 //   而不是单纯堆高弹幕密度。
+//
+// 全难度通用机制：
+// - warmupSkill：血量首次掉到 85% 时额外追加一波"热身"弹幕（单次 _emitPattern 调用，
+//   不暂停常规弹幕、不显示符卡横幅），给开局不久的战斗节奏加一个小高潮点。
 
 export const BOSSES = [
   {
@@ -27,6 +31,8 @@ export const BOSSES = [
       { type: "spread", count: 3, interval: 1.4, bulletSpeed: 90, spreadDeg: 50 },
       { type: "aimed", count: 1, interval: 1.0, bulletSpeed: 120 },
     ],
+    // 热身小技能：血量掉到 85% 时喷一圈孢子云，提前预告"这只 Boss 有环形攻击"。
+    warmupSkill: { type: "ring", count: 16, bulletSpeed: 100 },
     // 地狱难度专属"符卡"：环形孢子云，中间留一道缺口且缺口持续旋转，
     // 需要玩家追着缺口走位躲避——有明确规律、可读可练，而非单纯堆弹幕量。
     hellPattern: { type: "ringGap", count: 16, interval: 2.2, bulletSpeed: 92, gapDeg: 58, gapRotate: 0.46 },
@@ -58,6 +64,8 @@ export const BOSSES = [
       { type: "wave", count: 4, interval: 1.5, bulletSpeed: 80, spreadDeg: 80 },
       { type: "aimed", count: 1, interval: 0.95, bulletSpeed: 110 },
     ],
+    // 热身小技能：血量掉到 85% 时甩出一记大范围藤鞭横扫。
+    warmupSkill: { type: "wave", count: 7, bulletSpeed: 100, spreadDeg: 120 },
     // 地狱难度专属"符卡"：双臂反向旋转螺旋，交织成藤蔓缠绕状的"花瓣"弹幕，
     // 密度比单臂螺旋更高，但两臂对称可读，走位规律清晰。
     hellPattern: { type: "crossSpiral", count: 3, interval: 0.85, bulletSpeed: 84 },
@@ -88,6 +96,8 @@ export const BOSSES = [
       { type: "ring", count: 8, interval: 2.0, bulletSpeed: 80 },
       { type: "aimed", count: 2, interval: 0.95, bulletSpeed: 125 },
     ],
+    // 热身小技能：血量掉到 85% 时轰出一圈更密的水晶碎片环。
+    warmupSkill: { type: "ring", count: 14, bulletSpeed: 105 },
     // 地狱难度专属"符卡"：更密的水晶碎片环＋旋转缺口，缺口转速比森林关更快。
     hellPattern: { type: "ringGap", count: 20, interval: 2.4, bulletSpeed: 96, gapDeg: 52, gapRotate: 0.6 },
     // 半血大招符卡：满环水晶弹幕叠加高速旋转缺口环，密度全关第二高，
@@ -117,6 +127,8 @@ export const BOSSES = [
       { type: "spiral", count: 2, interval: 0.32, bulletSpeed: 88 },
       { type: "aimed", count: 2, interval: 0.95, bulletSpeed: 135 },
     ],
+    // 热身小技能：血量掉到 85% 时甩出一道交织鬼影弹幕，预告瞬移+螺旋的组合打法。
+    warmupSkill: { type: "crossSpiral", count: 4, bulletSpeed: 100 },
     // 地狱难度专属"符卡"：双臂交织螺旋叠加瞬移位移，编织出更难读的鬼影弹幕网。
     hellPattern: { type: "crossSpiral", count: 4, interval: 0.7, bulletSpeed: 92 },
     // 半血大招符卡：交织螺旋加速 + 反向旋转缺口环，配合瞬移位移让弹幕来源不断变化，
@@ -147,6 +159,8 @@ export const BOSSES = [
       { type: "spiral", count: 3, interval: 0.3, bulletSpeed: 90 },
       { type: "aimed", count: 2, interval: 0.95, bulletSpeed: 140 },
     ],
+    // 热身小技能：血量掉到 85% 时先亮出一道带缺口的月蚀弹幕环，预告最终 Boss 的招牌机制。
+    warmupSkill: { type: "ringGap", count: 18, bulletSpeed: 105, gapDeg: 70, gapRotate: 0 },
     // 最终Boss 地狱专属"符卡"：缺口更窄、旋转更快的月蚀弹幕环，全关卡最难的一道符卡。
     hellPattern: { type: "ringGap", count: 22, interval: 2.1, bulletSpeed: 100, gapDeg: 46, gapRotate: 0.7 },
     // 最终大招符卡：双环反向旋转缺口叠加交织螺旋与追踪弹，全游戏难度顶点，

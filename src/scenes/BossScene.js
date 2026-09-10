@@ -133,6 +133,13 @@ export class BossScene extends Scene {
     // 每个 pattern 独立计时器
     this.patTimers = this.patterns.map(() => 0);
 
+    // ===== 开场"热身"小技能：血量首次掉到 85% 时额外追加一波弹幕 =====
+    // 全难度通用（不受"地狱难度专属"限制），只是在常规弹幕节奏之上插入一次
+    // 一次性的、更有辨识度的小爆发，作为战斗刚开局不久的一个小高潮点；
+    // 不暂停常规弹幕、不显示符卡横幅，纯粹是"这个 Boss 亮了下招牌动作"。
+    this.warmupSkill = this.boss.warmupSkill || null;
+    this.warmupTriggered = false;
+
     this.playerBullets = [];
     this.bossBullets = [];
 
@@ -266,6 +273,9 @@ export class BossScene extends Scene {
 
     // ===== Boss移动 =====
     this._updateBoss(dt);
+
+    // ===== 开场热身小技能：血量首次掉到 85% 时先放一波（所有难度通用）=====
+    this._updateWarmupSkill();
 
     // ===== Boss 大招符卡：血量掉到阈值时触发（仅地狱难度）=====
     this._updateUltimateTrigger();
@@ -490,6 +500,18 @@ export class BossScene extends Scene {
     }
     //轻微左右浮动
     this.bx = (this.game.width - 70) + Math.sin(this.t * 1.5) * 6;
+  }
+
+  // 触发判定：Boss 血量首次掉到 85% 时，额外追加一波"热身"小技能弹幕。
+  // 与大招符卡不同——只是插入一次 _emitPattern，不暂停常规弹幕、不进入"符卡状态"、
+  // 不显示横幅，全难度通用，纯粹作为开局不久的一个小节奏点缀。
+  _updateWarmupSkill() {
+    if (!this.warmupSkill || this.warmupTriggered) return;
+    if (this.bhp > 0 && this.bhp <= this.bMaxHp * 0.85) {
+      this.warmupTriggered = true;
+      this._emitPattern(this.warmupSkill);
+      this.particles.burst(this.bx, this.by, this.boss.color, 20, { speed: 150, life: 0.6, size: 2.5 });
+    }
   }
 
   // 触发判定：Boss 血量每掉到一个阈值（50% → 15%）就触发一次大招符卡
