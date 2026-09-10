@@ -47,5 +47,18 @@ export function hasWitchSprites(skinId) {
   return !!SPRITE_MAP[skinId];
 }
 
+// 预加载所有角色立绘（3 套皮肤 × 4 个形态，共 12 张）。
+// 修复"角色贴图有概率消失"问题：原先每张立绘都是第一次要画的时候才发起加载，
+// 图片下载/解码完成前 getWitchSprite 会返回 null，导致那几帧回退成纯色方块（无立绘）。
+// 这里在游戏一启动（还在标题页时）就把全部立绘提前发起加载，
+// 等玩家真正进入关卡/切换形态时图片大概率早就绪，基本消除这个空窗期。
+export function preloadWitchSprites() {
+  for (const prefix of Object.values(SPRITE_MAP)) {
+    for (let stage = 0; stage < STAGE_ORDER.length; stage++) {
+      loadSprite(prefix, stage);
+    }
+  }
+}
+
 // 预览开关：给 Player / BossScene 一个总闸，方便整体关掉，恢复矢量画法。
 export const WITCH_SPRITES_ENABLED = true;
